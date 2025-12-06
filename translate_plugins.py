@@ -152,7 +152,7 @@ def main():
         local_path_hans = os.path.join(OUTPUT_DIR_HANS, url_path)
         ensure_dir(os.path.dirname(local_path_hans))
 
-        etag_file = os.path.join(".", hashlib.md5(url.encode()).hexdigest() + ".etag")  # 根目錄存檔
+        etag_file = local_path_hans + ".etag"
         etag_local = load_etag(etag_file)
 
         # 判斷是否需要下載
@@ -176,12 +176,7 @@ def main():
                 content = download_file(url)
                 # 儲存 ETag
                 if etag_remote:
-                    try:
-                        with open(etag_file, "w", encoding="utf8") as f:
-                            f.write(etag_remote)
-                        print(f"Saved ETag to {etag_file}: {etag_remote}")
-                    except Exception as e:
-                        print(f"Failed to save ETag: {e}")
+                    save_etag(etag_file, etag_remote)
             except Exception as e:
                 print(f"Download failed: {e}")
                 continue
