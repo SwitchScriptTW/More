@@ -1,0 +1,188 @@
+import os
+import re
+import json
+import time
+import requests
+import zipfile
+import io
+import hashlib
+
+# ----------------------------
+# 配置
+# ----------------------------
+MAIN_ZIP_URL = "https://dl.awa.cool/hahappify/xlcj/qun.zip"
+BASE_DIR = "./repo"           # repo 根目錄
+TEMP_DIR = "./temp"           # 臨時下載與解壓
+OUTPUT_DIR = BASE_DIR         # 輸出路徑對應 URL
+
+DICT_STRING_FILE = os.path.join(BASE_DIR, "dict_string.json")
+DICT_URL_FILE = os.path.join(BASE_DIR, "dict_url.json")
+
+# ----------------------------
+# 輔助函數
+# ----------------------------
+def ensure_dir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+def file_hash(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        h.update(f.read())
+    return h.hexdigest()
+
+def download_file(url):
+    print(f"Downloading {url}")
+    r = requests.get(url)
+    r.raise_for_status()
+    return r.content
+
+def zhconvert(text, lang="Taiwan"):
+    modules = '{"Computer":1,"Smooth":1,"Unit":1,"ProperNoun":1,"QuotationMark":1,"InternetSlang":1,"Repeat":1,"RepeatAutoFix":1,"GanToZuo":0}'
+    args = {"text": text, "converter": lang, "modules": modules}
+    url = "https://api.zhconvert.org/convert"
+    response = requests.post(url, data=args, headers={'User-Agent': 'XXXBot/1.0'}).content.decode("utf8")
+    try:
+        code = json.loads(response)["code"]
+        if code == 0:
+            return json.loads(response)["data"]["text"]
+        else:
+            print("Error:", response)
+            return text
+    except:
+        print("Error:", response)
+        return text
+
+def extract_zip(content, extract_to):
+    ensure_dir(extract_to)
+    z = zipfile.ZipFile(io.BytesIO(content))
+    z.extractall(extract_to)
+    return [f.filename for f in z.infolist() if not f.is_dir()]
+
+def zip_dir(folder_path, zip_path):
+    ensure_dir(os.path.dirname(zip_path))
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
+        for root, _, files in os.walk(folder_path):
+            for f in files:
+                fullpath = os.path.join(root, f)
+                arcname = os.path.relpath(fullpath, folder_path)
+                z.write(fullpath, arcname)
+
+def load_json(path):
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf8") as f:
+            return json.load(f)
+    return {}
+
+def save_json(path, obj):
+    ensure_dir(os.path.dirname(path))
+    with open(path, "w", encoding="utf8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+def line_contains_chinese(line):
+    return re.search(r"[\u4e00-\u9fa5]", line) is not None
+
+# ----------------------------
+# 主程式
+# ----------------------------
+def main():
+    ensure_dir(TEMP_DIR)
+    ensure_dir(BASE_DIR)
+
+    dict_string = load_json(DICT_STRING_FILE)
+    dict_url = load_json(DICT_URL_FILE)
+
+    # ----------------------------
+    # 下載主 qun.zip
+    # ----------------------------
+    main_zip_content = download_file(MAIN_ZIP_URL)
+    temp_main_dir = os.path.join(TEMP_DIR, "qun")
+    extracted_files = extract_zip(main_zip_content, temp_main_dir)
+
+    # ----------------------------
+    # 找出內部 URL
+    # ----------------------------
+    url_set = set()
+    url_pattern = re.compile(r"https://dl\.awa\.cool/[^\s\"']+")
+    for root, _, files in os.walk(temp_main_dir):
+        for f in files:
+            path = os.path.join(root, f)
+            try:
+                with open(path, "r", encoding="utf8") as file:
+                    content = file.read()
+                for match in url_pattern.findall(content):
+                    if match != "https://dl.awa.cool/":
+                        url_set.add(match)
+            except:
+                continue
+
+    # ----------------------------
+    # 下載所有 URL 並繁化
+    # ----------------------------
+    for url in url_set:
+        print(f"\nProcessing URL: {url}")
+        url_path = url.replace("https://dl.awa.cool/", "")
+        local_path = os.path.join(BASE_DIR, url_path)
+        zip_output_path = os.path.splitext(local_path)[0] + "_zh-TW.zip"
+
+        # 比對更新
+        need_download = True
+        if os.path.exists(local_path):
+            remote_head = requests.head(url).headers.get("ETag")
+            local_hash = file_hash(local_path)
+            # 簡單比對 hash 或 ETag（可進一步擴充）
+            if remote_head == local_hash:
+                print("No update, skipping download")
+                need_download = False
+
+        # 下載 ZIP
+        if need_download:
+            try:
+                content = download_file(url)
+            except Exception as e:
+                print(f"Download failed: {e}")
+                continue
+            ensure_dir(os.path.dirname(local_path))
+            with open(local_path, "wb") as f:
+                f.write(content)
+
+        # 解壓 ZIP
+        temp_dir = os.path.join(TEMP_DIR, hashlib.md5(url.encode()).hexdigest())
+        extracted = extract_zip(content, temp_dir)
+
+        # 處理每個文字檔
+        for root, _, files in os.walk(temp_dir):
+            for f in files:
+                path = os.path.join(root, f)
+                try:
+                    with open(path, "r", encoding="utf8") as file:
+                        lines = file.readlines()
+                    new_lines = []
+                    for line in lines:
+                        if line_contains_chinese(line):
+                            if line in dict_string:
+                                new_line = dict_string[line]
+                            else:
+                                new_line = zhconvert(line)
+                                dict_string[line] = new_line
+                                time.sleep(1)
+                            new_lines.append(new_line)
+                        else:
+                            new_lines.append(line)
+                    with open(path, "w", encoding="utf8") as file:
+                        file.writelines(new_lines)
+                except:
+                    continue
+
+        # 保存 dict_url.json
+        if url not in dict_url:
+            dict_url[url] = os.path.basename(url)
+        save_json(DICT_STRING_FILE, dict_string)
+        save_json(DICT_URL_FILE, dict_url)
+
+        # 壓縮回 ZIP
+        zip_dir(temp_dir, zip_output_path)
+        print(f"Saved translated ZIP: {zip_output_path}")
+
+if __name__ == "__main__":
+    main()
