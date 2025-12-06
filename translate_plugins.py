@@ -83,6 +83,17 @@ def save_json(path, obj):
 def line_contains_chinese(line):
     return re.search(r"[\u4e00-\u9fa5]", line) is not None
 
+def load_etag(path):
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf8") as f:
+            return f.read().strip()
+    return None
+
+def save_etag(path, etag):
+    ensure_dir(os.path.dirname(path))
+    with open(path, "w", encoding="utf8") as f:
+        f.write(etag)
+
 # ----------------------------
 # 主程式
 # ----------------------------
@@ -127,22 +138,26 @@ def main():
         local_path_hans = os.path.join(OUTPUT_DIR_HANS, url_path)
         ensure_dir(os.path.dirname(local_path_hans))
 
+        etag_file = os.path.join(".", hashlib.md5(url.encode()).hexdigest() + ".etag")  # 根目錄存檔
+        etag_local = load_etag(etag_file)
+
         # 判斷是否需要下載
         need_download = True
-        if os.path.exists(local_path_hans):
-            try:
-                remote_head = requests.head(url).headers.get("ETag")
-                local_hash = file_hash(local_path_hans)
-                if remote_head == local_hash:
-                    print("No update, skipping download")
-                    need_download = False
-            except:
-                pass
+        try:
+            etag_remote = requests.head(url).headers.get("ETag")
+            if etag_remote and etag_remote == etag_local:
+                print("No update, skipping download")
+                need_download = False
+        except:
+            print("HEAD request failed, will download")
 
         # 下載 ZIP
         if need_download:
             try:
                 content = download_file(url)
+                # 保存 ETag
+                if etag_remote:
+                    save_etag(etag_file, etag_remote)
             except Exception as e:
                 print(f"Download failed: {e}")
                 continue
