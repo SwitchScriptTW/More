@@ -3,13 +3,18 @@ name: Translate Plugins
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 20 * * *'  # 每天 UTC 20 點
+    - cron: '0 20 * * *' # 每天 UTC 20 點
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          persist-credentials: true
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -24,5 +29,5 @@ jobs:
           git config user.email "action@github.com"
           git add Hans/**/* Hant/**/*
           git add dict_string.json dict_url.json
-          git commit -m "繁化更新"
+          git commit -m "繁化更新" || echo "No changes to commit"
           git push
