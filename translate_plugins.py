@@ -157,21 +157,31 @@ def main():
 
         # 判斷是否需要下載
         need_download = True
-        try:
-            etag_remote = requests.head(url).headers.get("ETag")
-            if etag_remote and etag_remote == etag_local:
-                print("No update, skipping download")
-                need_download = False
-        except:
-            print("HEAD request failed, will download")
+        etag_remote = None
 
+        try:
+            head_resp = requests.head(url, timeout=10)
+            etag_remote = head_resp.headers.get("ETag")
+            if etag_remote:
+                etag_remote = etag_remote.strip('"')  # 去掉雙引號
+                if etag_remote == etag_local:
+                    print("No update, skipping download")
+                    need_download = False
+        except Exception as e:
+            print(f"HEAD request failed: {e}, will download")
+        
         # 下載 ZIP
         if need_download:
             try:
                 content = download_file(url)
-                # 保存 ETag
+                # 儲存 ETag
                 if etag_remote:
-                    save_etag(etag_file, etag_remote)
+                    try:
+                        with open(etag_file, "w", encoding="utf8") as f:
+                            f.write(etag_remote)
+                        print(f"Saved ETag to {etag_file}: {etag_remote}")
+                    except Exception as e:
+                        print(f"Failed to save ETag: {e}")
             except Exception as e:
                 print(f"Download failed: {e}")
                 continue
