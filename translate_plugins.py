@@ -140,6 +140,8 @@ def main():
                 for match in url_pattern.findall(content):
                     if match != "https://dl.awa.cool/" and not match.startswith("https://dl.awa.cool/hahappify/nro/"):
                         url_set.add(match)
+                        if url not in dict_url:
+                            dict_url[url] = url
             except:
                 continue
 
@@ -227,7 +229,7 @@ def main():
 
         # 保存 dict_url.json
         if url not in dict_url:
-            dict_url[url] = os.path.basename(url)
+            dict_url[url] = url
         save_json(DICT_STRING_FILE, dict_string)
         save_json(DICT_URL_FILE, dict_url)
 
