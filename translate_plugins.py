@@ -39,10 +39,24 @@ def download_file(url):
     return r.content
 
 def zhconvert(text, lang="Taiwan"):
+    # 詞語模組
     modules = '{"Computer":1,"Smooth":1,"Unit":1,"ProperNoun":1,"QuotationMark":1,"InternetSlang":1,"Repeat":1,"RepeatAutoFix":1,"GanToZuo":0}'
-    args = {"text": text, "converter": lang, "modules": modules}
+    # 保護字詞
+    userProtectReplace = "用戶"
+    # 轉換前替換
+    userPreReplace = "插件=外掛"
+    # 轉換後替換
+    userPostReplace = "獲取=取得\n添加=新增\n下劃線=底線\n相冊=相簿"
+    args = {
+        "text": text,
+        "converter": lang,
+        "modules": modules,
+        "userPreReplace": userPreReplace,
+        "userPostReplace": userPostReplace,
+        "userProtectReplace": userProtectReplace
+    }
     url = "https://api.zhconvert.org/convert"
-    response = requests.post(url, data=args, headers={'User-Agent': 'SwitchScriptTW_Bot/1.0'}).content.decode("utf8")
+    response = requests.post(url, data=args, headers={'User-Agent': 'SwitchScriptTW_Bot/1.0 (+https://github.com/david082321)'}).content.decode("utf8")
     try:
         code = json.loads(response)["code"]
         if code == 0:
