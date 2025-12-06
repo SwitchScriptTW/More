@@ -167,6 +167,15 @@ def main():
                         lines = file.readlines()
                     new_lines = []
                     for line in lines:
+                        # 替換 URL
+                        def replace_url(m):
+                            url = m.group(0)
+                            if url not in dict_url:
+                                dict_url[url] = url  # 預設 value 等於原 URL
+                            return dict_url[url]        
+                        line = re.sub(r"https://dl\.awa\.cool/[^\s\"']+", replace_url, line)
+
+                        # 繁化中文
                         if line_contains_chinese(line):
                             if line in dict_string:
                                 new_line = dict_string[line]
