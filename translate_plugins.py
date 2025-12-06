@@ -42,7 +42,7 @@ def zhconvert(text, lang="Taiwan"):
     modules = '{"Computer":1,"Smooth":1,"Unit":1,"ProperNoun":1,"QuotationMark":1,"InternetSlang":1,"Repeat":1,"RepeatAutoFix":1,"GanToZuo":0}'
     args = {"text": text, "converter": lang, "modules": modules}
     url = "https://api.zhconvert.org/convert"
-    response = requests.post(url, data=args, headers={'User-Agent': 'XXXBot/1.0'}).content.decode("utf8")
+    response = requests.post(url, data=args, headers={'User-Agent': 'SwitchScriptTW_Bot/1.0'}).content.decode("utf8")
     try:
         code = json.loads(response)["code"]
         if code == 0:
