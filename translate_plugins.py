@@ -1,3 +1,4 @@
+# translate_plugins.py
 import os
 import re
 import json
@@ -11,12 +12,12 @@ import hashlib
 # 配置
 # ----------------------------
 MAIN_ZIP_URL = "https://dl.awa.cool/hahappify/xlcj/qun.zip"
-BASE_DIR = "./repo"           # repo 根目錄
 TEMP_DIR = "./temp"           # 臨時下載與解壓
-OUTPUT_DIR = BASE_DIR         # 輸出路徑對應 URL
+OUTPUT_DIR_HANS = "./Hans"    # 原始簡體 ZIP
+OUTPUT_DIR_HANT = "./Hant"    # 繁體 ZIP
 
-DICT_STRING_FILE = os.path.join(BASE_DIR, "dict_string.json")
-DICT_URL_FILE = os.path.join(BASE_DIR, "dict_url.json")
+DICT_STRING_FILE = "./dict_string.json"
+DICT_URL_FILE = "./dict_url.json"
 
 # ----------------------------
 # 輔助函數
@@ -87,7 +88,8 @@ def line_contains_chinese(line):
 # ----------------------------
 def main():
     ensure_dir(TEMP_DIR)
-    ensure_dir(BASE_DIR)
+    ensure_dir(OUTPUT_DIR_HANS)
+    ensure_dir(OUTPUT_DIR_HANT)
 
     dict_string = load_json(DICT_STRING_FILE)
     dict_url = load_json(DICT_URL_FILE)
@@ -97,7 +99,7 @@ def main():
     # ----------------------------
     main_zip_content = download_file(MAIN_ZIP_URL)
     temp_main_dir = os.path.join(TEMP_DIR, "qun")
-    extracted_files = extract_zip(main_zip_content, temp_main_dir)
+    extract_zip(main_zip_content, temp_main_dir)
 
     # ----------------------------
     # 找出內部 URL
@@ -111,7 +113,7 @@ def main():
                 with open(path, "r", encoding="utf8") as file:
                     content = file.read()
                 for match in url_pattern.findall(content):
-                    if match != "https://dl.awa.cool/":
+                    if match != "https://dl.awa.cool/" and not match.startswith("https://dl.awa.cool/hahappify/nro/"):
                         url_set.add(match)
             except:
                 continue
@@ -122,18 +124,20 @@ def main():
     for url in url_set:
         print(f"\nProcessing URL: {url}")
         url_path = url.replace("https://dl.awa.cool/", "")
-        local_path = os.path.join(BASE_DIR, url_path)
-        zip_output_path = os.path.splitext(local_path)[0] + "_zh-TW.zip"
+        local_path_hans = os.path.join(OUTPUT_DIR_HANS, url_path)
+        ensure_dir(os.path.dirname(local_path_hans))
 
-        # 比對更新
+        # 判斷是否需要下載
         need_download = True
-        if os.path.exists(local_path):
-            remote_head = requests.head(url).headers.get("ETag")
-            local_hash = file_hash(local_path)
-            # 簡單比對 hash 或 ETag（可進一步擴充）
-            if remote_head == local_hash:
-                print("No update, skipping download")
-                need_download = False
+        if os.path.exists(local_path_hans):
+            try:
+                remote_head = requests.head(url).headers.get("ETag")
+                local_hash = file_hash(local_path_hans)
+                if remote_head == local_hash:
+                    print("No update, skipping download")
+                    need_download = False
+            except:
+                pass
 
         # 下載 ZIP
         if need_download:
@@ -142,13 +146,17 @@ def main():
             except Exception as e:
                 print(f"Download failed: {e}")
                 continue
-            ensure_dir(os.path.dirname(local_path))
-            with open(local_path, "wb") as f:
+            # 保存原始簡體到 Hans
+            with open(local_path_hans, "wb") as f:
                 f.write(content)
+            print(f"Saved original ZIP: {local_path_hans}")
+        else:
+            with open(local_path_hans, "rb") as f:
+                content = f.read()
 
         # 解壓 ZIP
         temp_dir = os.path.join(TEMP_DIR, hashlib.md5(url.encode()).hexdigest())
-        extracted = extract_zip(content, temp_dir)
+        extract_zip(content, temp_dir)
 
         # 處理每個文字檔
         for root, _, files in os.walk(temp_dir):
@@ -180,9 +188,10 @@ def main():
         save_json(DICT_STRING_FILE, dict_string)
         save_json(DICT_URL_FILE, dict_url)
 
-        # 壓縮回 ZIP
-        zip_dir(temp_dir, zip_output_path)
-        print(f"Saved translated ZIP: {zip_output_path}")
+        # 壓縮回 ZIP (繁體)
+        zip_output_path_hant = os.path.join(OUTPUT_DIR_HANT, url_path)
+        zip_dir(temp_dir, zip_output_path_hant)
+        print(f"Saved translated ZIP: {zip_output_path_hant}")
 
 if __name__ == "__main__":
     main()
