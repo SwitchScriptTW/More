@@ -2,8 +2,8 @@ name: Translate Plugins
 
 on:
   workflow_dispatch:
-#  schedule:
-#    - cron: '0 20 * * *' # 每天 UTC 20 點
+  schedule:
+    - cron: '0 20 * * *' # 每天 UTC 20:00（UTC+8 04:00）
 
 permissions:
   contents: write
