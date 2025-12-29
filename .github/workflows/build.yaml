@@ -3,7 +3,7 @@ name: Translate Plugins
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 20 * * *' # 每天 UTC 20:00（UTC+8 04:00）
+    - cron: '0 20 * * 6' # 周六20:00 UTC（周日04:00 UTC+8）
 
 permissions:
   contents: write
