@@ -109,6 +109,30 @@ def save_etag(path, etag):
     with open(path, "w", encoding="utf8") as f:
         f.write(etag)
 
+def process_lines(lines, dict_url, dict_string):
+    new_lines = []
+    for line in lines:
+        # 替換 URL
+        def replace_url(m):
+            u = m.group(0)
+            if u not in dict_url:
+                dict_url[u] = u  # 預設 value 等於原 URL
+            return dict_url[u]        
+        line = re.sub(r"https://dl\.awa\.cool/[^\s\"']+", replace_url, line)
+
+        # 繁化中文
+        if line_contains_chinese(line):
+            if line in dict_string:
+                new_line = dict_string[line]
+            else:
+                new_line = zhconvert(line)
+                dict_string[line] = new_line
+                time.sleep(1) # 避免 API 請求過快
+            new_lines.append(new_line)
+        else:
+            new_lines.append(line)
+    return new_lines
+
 # ----------------------------
 # 主程式
 # ----------------------------
@@ -191,53 +215,53 @@ def main():
             with open(local_path_hans, "rb") as f:
                 content = f.read()
 
-        # 解壓 ZIP
-        temp_dir = os.path.join(TEMP_DIR, hashlib.md5(url.encode()).hexdigest())
-        extract_zip(content, temp_dir)
+        # 判斷是否為 ZIP 檔案
+        if url_path.lower().endswith(".zip"):
+            # --- ZIP 處理流程 ---
+            # 解壓 ZIP
+            temp_dir = os.path.join(TEMP_DIR, hashlib.md5(url.encode()).hexdigest())
+            extract_zip(content, temp_dir)
 
-        # 處理每個文字檔
-        for root, _, files in os.walk(temp_dir):
-            for f in files:
-                path = os.path.join(root, f)
-                try:
-                    with open(path, "r", encoding="utf8") as file:
-                        lines = file.readlines()
-                    new_lines = []
-                    for line in lines:
-                        # 替換 URL
-                        def replace_url(m):
-                            url = m.group(0)
-                            if url not in dict_url:
-                                dict_url[url] = url  # 預設 value 等於原 URL
-                            return dict_url[url]        
-                        line = re.sub(r"https://dl\.awa\.cool/[^\s\"']+", replace_url, line)
+            # 處理每個文字檔
+            for root, _, files in os.walk(temp_dir):
+                for f in files:
+                    path = os.path.join(root, f)
+                    try:
+                        with open(path, "r", encoding="utf8") as file:
+                            lines = file.readlines()
+                        
+                        # 使用輔助函數處理內容
+                        new_lines = process_lines(lines, dict_url, dict_string)
 
-                        # 繁化中文
-                        if line_contains_chinese(line):
-                            if line in dict_string:
-                                new_line = dict_string[line]
-                            else:
-                                new_line = zhconvert(line)
-                                dict_string[line] = new_line
-                                time.sleep(1)
-                            new_lines.append(new_line)
-                        else:
-                            new_lines.append(line)
-                    with open(path, "w", encoding="utf8") as file:
-                        file.writelines(new_lines)
-                except:
-                    continue
+                        with open(path, "w", encoding="utf8") as file:
+                            file.writelines(new_lines)
+                    except Exception as e:
+                        # print(f"Skip file {f}: {e}")
+                        continue
+            
+            # 壓縮回 ZIP (繁體)
+            zip_output_path_hant = os.path.join(OUTPUT_DIR_HANT, url_path)
+            zip_dir(temp_dir, zip_output_path_hant)
+            print(f"Saved translated ZIP: {zip_output_path_hant}")
+        
+        else:
+            # --- 純文字/INI 處理流程 ---
+            try:
+                # 嘗試將內容解碼為文字
+                text_content = content.decode("utf-8")
+                lines = text_content.splitlines(keepends=True)
+                
+                # 使用輔助函數處理內容
+                new_lines = process_lines(lines, dict_url, dict_string)
 
-        # 保存 dict_url.json
-        if url not in dict_url:
-            dict_url[url] = url
-        save_json(DICT_STRING_FILE, dict_string)
-        save_json(DICT_URL_FILE, dict_url)
-
-        # 壓縮回 ZIP (繁體)
-        zip_output_path_hant = os.path.join(OUTPUT_DIR_HANT, url_path)
-        zip_dir(temp_dir, zip_output_path_hant)
-        print(f"Saved translated ZIP: {zip_output_path_hant}")
+                # 直接存入 Hant 資料夾
+                output_path_hant = os.path.join(OUTPUT_DIR_HANT, url_path)
+                ensure_dir(os.path.dirname(output_path_hant))
+                with open(output_path_hant, "w", encoding="utf8") as f:
+                    f.writelines(new_lines)
+                print(f"Saved translated Text: {output_path_hant}")
+            except Exception as e:
+                print(f"Failed to process text file {url}: {e}")
 
 if __name__ == "__main__":
     main()
